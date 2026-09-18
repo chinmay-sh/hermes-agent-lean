@@ -25,21 +25,17 @@ Only `linux/amd64` is built.
 
 ## Usage
 
-Swap the image in your compose file:
+[`docker-compose.yml`](docker-compose.yml) runs the Hermes gateway with the web dashboard behind a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/). It publishes no host ports.
 
-```yaml
-image: <dockerhub-user>/hermes-agent-lean:v2026.9.14
-```
+1. In Cloudflare Zero Trust, create a tunnel and copy its token. Add a public hostname (e.g. `hermes.example.com`) that routes to `http://hermes:9119`.
+2. Copy [`.env.example`](.env.example) to `.env` and fill it in.
+3. Start it:
 
-To use the web dashboard, set these environment variables:
+   ```bash
+   docker compose up -d
+   ```
 
-```env
-HERMES_DASHBOARD=1
-HERMES_DASHBOARD_BASIC_AUTH_USERNAME=...
-HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=...
-```
-
-The dashboard listens on port `9119`. It won't start on a non-loopback address without an auth provider.
+Agent state lives in `./data`. The dashboard won't start on a non-loopback address without an auth provider; the basic-auth variables in `.env` provide one.
 
 To update, bump the tag and run:
 
