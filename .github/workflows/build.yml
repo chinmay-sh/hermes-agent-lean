@@ -1,0 +1,64 @@
+name: build-lean
+on:
+  schedule: [{ cron: "0 6 * * *" }]   # daily; skips if already built
+  workflow_dispatch:
+    inputs:
+      tag: { description: "Upstream tag (blank = latest release)", required: false }
+
+permissions: { contents: read }
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/hermes-agent-lean
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve upstream release
+        id: rel
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          tag="${{ inputs.tag }}"
+          [ -n "$tag" ] || tag=$(gh release view --repo NousResearch/hermes-agent --json tagName -q .tagName)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Skip if already pushed
+        id: check
+        run: |
+          docker manifest inspect "$IMAGE:${{ steps.rel.outputs.tag }}" >/dev/null 2>&1 \
+            && echo "skip=true" >> "$GITHUB_OUTPUT" || true
+
+      - if: steps.check.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: NousResearch/hermes-agent
+          ref: ${{ steps.rel.outputs.tag }}
+          path: upstream
+
+      - if: steps.check.outputs.skip != 'true'
+        id: patch
+        run: |
+          git -C upstream apply ../lean.patch
+          echo "sha=$(git -C upstream rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - if: steps.check.outputs.skip != 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - if: steps.check.outputs.skip != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: upstream
+          platforms: linux/amd64
+          push: true
+          build-args: HERMES_GIT_SHA=${{ steps.patch.outputs.sha }}
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.rel.outputs.tag }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
