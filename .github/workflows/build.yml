@@ -4,12 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       tag: { description: "Upstream tag (blank = latest release)", required: false }
+      kapso_ref: { description: "gokapso/hermes-agent-plugin git ref for the -kapso variant (blank = latest tag)", required: false }
 
 permissions: { contents: read }
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ["", "-kapso"]
     env:
       IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/hermes-agent-lean
     steps:
@@ -31,7 +36,7 @@ jobs:
       - name: Skip if already pushed
         id: check
         run: |
-          docker manifest inspect "$IMAGE:${{ steps.rel.outputs.tag }}" >/dev/null 2>&1 \
+          docker manifest inspect "$IMAGE:${{ steps.rel.outputs.tag }}${{ matrix.variant }}" >/dev/null 2>&1 \
             && echo "skip=true" >> "$GITHUB_OUTPUT" || true
 
       - if: steps.check.outputs.skip != 'true'
@@ -41,10 +46,41 @@ jobs:
           ref: ${{ steps.rel.outputs.tag }}
           path: upstream
 
+      - name: Resolve Kapso plugin ref
+        id: kapso
+        if: steps.check.outputs.skip != 'true' && matrix.variant == '-kapso'
+        run: |
+          ref="${{ inputs.kapso_ref }}"
+          [ -n "$ref" ] || ref=$(git ls-remote --tags --refs --sort='-v:refname' \
+            https://github.com/gokapso/hermes-agent-plugin.git | head -n1 | sed 's#.*refs/tags/##')
+          [ -n "$ref" ] || ref=main
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - if: steps.check.outputs.skip != 'true' && matrix.variant == '-kapso'
+        uses: actions/checkout@v4
+        with:
+          repository: gokapso/hermes-agent-plugin
+          ref: ${{ steps.kapso.outputs.ref }}
+          path: kapso-plugin
+
+      - name: Bundle the Kapso WhatsApp platform plugin
+        if: steps.check.outputs.skip != 'true' && matrix.variant == '-kapso'
+        # Dropped in as plugins/platforms/kapso/ (the same shape as the
+        # in-tree telegram/whatsapp/etc. adapters) so Hermes discovers it as
+        # a bundled, lazy-loaded platform: no `hermes plugins install` and no
+        # config.yaml edit needed at runtime, just the KAPSO_* env vars.
+        run: |
+          dest=upstream/plugins/platforms/kapso
+          mkdir -p "$dest"
+          cp kapso-plugin/plugin.yaml kapso-plugin/__init__.py kapso-plugin/adapter.py "$dest/"
+
       - if: steps.check.outputs.skip != 'true'
         id: patch
         run: |
           git -C upstream apply ../lean.patch
+          if [ "${{ matrix.variant }}" = "-kapso" ]; then
+            git -C upstream apply ../kapso.patch
+          fi
           echo "sha=$(git -C upstream rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - if: steps.check.outputs.skip != 'true'
@@ -58,7 +94,7 @@ jobs:
           push: true
           build-args: HERMES_GIT_SHA=${{ steps.patch.outputs.sha }}
           tags: |
-            ${{ env.IMAGE }}:${{ steps.rel.outputs.tag }}
-            ${{ env.IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ env.IMAGE }}:${{ steps.rel.outputs.tag }}${{ matrix.variant }}
+            ${{ env.IMAGE }}:latest${{ matrix.variant }}
+          cache-from: type=gha,scope=${{ matrix.variant || 'lean' }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant || 'lean' }}

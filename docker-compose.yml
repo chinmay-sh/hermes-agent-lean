@@ -20,6 +20,13 @@ services:
       HERMES_DASHBOARD_BASIC_AUTH_SECRET: ${HERMES_DASHBOARD_BASIC_AUTH_SECRET}
       # The lean image has no compiler toolchain, so runtime pip installs would fail anyway.
       HERMES_DISABLE_LAZY_INSTALLS: "1"
+      # Only used by the -kapso image variant; harmless on the plain tags.
+      # See README.md#the--kapso-variant.
+      KAPSO_API_KEY: ${KAPSO_API_KEY:-}
+      KAPSO_WEBHOOK_SECRET: ${KAPSO_WEBHOOK_SECRET:-}
+      KAPSO_PHONE_NUMBER_ID: ${KAPSO_PHONE_NUMBER_ID:-}
+      KAPSO_HOME_CHANNEL: ${KAPSO_HOME_CHANNEL:-}
+      KAPSO_ALLOWED_USERS: ${KAPSO_ALLOWED_USERS:-}
     expose:
       - "9119"
     networks: [hermes]
