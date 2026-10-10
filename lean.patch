@@ -64,7 +64,7 @@ index a245d55f..2a328049 100644
 +# find_spec anchor in pm/extras.py ("telegram") reports the platform as
 +# available and no runtime lazy install is attempted against the sealed
 +# /opt/hermes/.venv (which is never written at runtime).
-+RUN uv_bin="$(python3 -c 'from pm import installed_package; print(installed_package("uv").binary)')" && \
++RUN uv_bin="$(python3 -c 'from pm import uv_launcher; print(uv_launcher("uv"))')" && \
 +    "$uv_bin" pip install --python /opt/hermes/.venv/bin/python --no-cache-dir \
 +    "python-telegram-bot[webhooks]==22.8"
  
