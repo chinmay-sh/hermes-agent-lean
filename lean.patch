@@ -1,65 +1,79 @@
 diff --git a/Dockerfile b/Dockerfile
-index ba9cbe8..6a141af 100644
+index a245d55f..2a328049 100644
 --- a/Dockerfile
 +++ b/Dockerfile
-@@ -70,7 +70,17 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/opt/hermes/.playwright
- # hermes process, the dashboard, and per-profile gateways.
+@@ -73,10 +73,15 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/opt/hermes/tools
+ # must be declared here. The list is the `ldd ... | grep "not found"` set of
+ # the pinned chrome binary in this base image, mapped to trixie package
+ # names (see .hermes/plans/termux-removal-commit-spec.md).
++# Lean: no compiler toolchain or Python dev headers (every baked dependency
++# ships manylinux wheels), no libolm/docker-cli/iputils-ping, and none of the
++# shared libraries the pinned Chromium links against — this variant stages no
++# browser at all (see the pm ensure list below), so the browser tool is
++# unavailable in the lean image by design. ffmpeg and ripgrep are pm-staged
++# below rather than apt-installed.
  RUN apt-get -o Acquire::Retries=3 update && \
      apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
--    ca-certificates curl iputils-ping python3 python-is-python3 ripgrep ffmpeg gcc g++ make cmake python3-dev python3-venv libffi-dev libolm-dev libatomic1 procps git openssh-client docker-cli xz-utils && \
-+    ca-certificates \
-+    curl \
-+    python3 \
-+    python-is-python3 \
-+    ripgrep \
-+    ffmpeg \
-+    libatomic1 \
-+    procps \
-+    git \
-+    openssh-client \
-+    xz-utils && \
+-    ca-certificates curl iputils-ping python3 python-is-python3 gcc g++ make cmake python3-dev python3-venv libffi-dev libolm-dev libatomic1 procps git openssh-client docker-cli xz-utils \
+-    libasound2t64 libatk-bridge2.0-0t64 libatk1.0-0t64 libatspi2.0-0t64 libcairo2 libcups2t64 libdbus-1-3 libgbm1 libglib2.0-0t64 libnspr4 libnss3 libpango-1.0-0 libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxkbcommon0 libxrandr2 && \
++    ca-certificates curl python3 python-is-python3 libatomic1 procps git openssh-client xz-utils && \
      rm -rf /var/lib/apt/lists/*
  
  # Bot Screen (opt-in): PACKAGES["apt"] from tools/bot_desktop/runtime.py plus apt
-@@ -180,6 +190,7 @@ COPY --chmod=0755 --from=uv_source /usr/local/bin/uv /usr/local/bin/uvx /usr/loc
- # See node_source stage at the top of the file for the version-bump
- # rationale (#4977).
- COPY --chmod=0755 --from=node_source /usr/local/bin/node /usr/local/bin/
-+# npm is build-time only; removed in the frontend build RUN below.
- COPY --from=node_source /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
- RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
-     ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
-@@ -214,40 +225,20 @@ COPY apps/shared/ apps/shared/
- # guards against a future regression if the source npm version changes.
- ENV npm_config_install_links=false
+@@ -208,17 +213,17 @@ COPY hermes_constants.py hermes_constants.py
+ # PM imports the shared stdlib locking owner before deps exist.
+ COPY hermes_cli/__init__.py hermes_cli/runtime_state.py hermes_cli/
+ COPY scripts/bundles/payload.py scripts/bundles/payload.py
++# Lean: chromium is dropped from the pm ensure list, and the browser path
++# resolution + /etc/hermes/agent-browser-executable-path bake go with it —
++# docker/stage2-hook.sh explicitly supports builds that ship no browser
++# ("Quietly skipped when the baked path file is absent"), so the browser tool
++# is simply unavailable here instead of half-configured.
+ RUN set -eu; \
+-    python3 -c 'from pm import ensure; [ensure(name, explicit=True) for name in ("uv", "chromium", "npm", "ffmpeg", "ripgrep")]'; \
++    python3 -c 'from pm import ensure; [ensure(name, explicit=True) for name in ("uv", "npm", "ffmpeg", "ripgrep")]'; \
+     python3 -c 'from pathlib import Path; from pm import installed_package; [Path("/usr/local/bin", command).symlink_to(installed_package(package).binary) for command, package in (("python3", "python"), ("node", "node"), ("npm", "npm"), ("ffmpeg", "ffmpeg"), ("rg", "ripgrep"))]; Path("/usr/local/bin/ffprobe").symlink_to(installed_package("ffmpeg").binary.with_name("ffprobe"))'; \
+     ffmpeg -version >/dev/null; ffprobe -version >/dev/null; rg --version >/dev/null; \
+     python3 -c 'import shutil; from pathlib import Path; from pm import env_for; Path("/usr/local/bin/npx").symlink_to(shutil.which("npx", path=env_for("npm", base_env={})["PATH"]))'; \
+-    node --version; npm --version; \
+-    browser_bin="$(python3 -c 'from pm import installed_package; print(installed_package("chromium").binary)')"; \
+-    test -n "$browser_bin"; \
+-    "$browser_bin" --version; \
+-    mkdir -p /etc/hermes; \
+-    printf '%s' "$browser_bin" > /etc/hermes/agent-browser-executable-path
++    node --version; npm --version
  
--# chrome-headless-shell: what the browser tool has always driven headlessly.
--# Smaller, no window code paths. --with-deps pulls the shared system libraries.
-+# Install, build, and delete node_modules + npm in ONE layer so the image
-+# never carries them (a later `rm` layer would not shrink the image). The
-+# TUI bundle is self-contained (ui-tui/scripts/build.mjs) and the web build
-+# is static files in hermes_cli/web_dist. This also skips both Playwright
-+# installs above (headless-shell and Bot Screen desktop Chromium): browser
-+# tools are unavailable in this lean image.
-+COPY web/ web/
-+COPY ui-tui/ ui-tui/
- RUN npm install --prefer-offline --no-audit --fetch-retries=5 && \
--    for i in 1 2 3; do \
--        npx playwright install --with-deps chromium --only-shell && break || \
--        { [ "$i" = 3 ] && exit 1; echo "playwright headless-shell install failed (attempt $i); retrying in 10s"; sleep 10; }; \
--    done && \
--    npm cache clean --force
--
--# chrome-headless-shell cannot open a window, so the dock's Browser icon needs the
--# full build. Same Chromium family as the shell, so agent and human share one
--# --user-data-dir. Gated: a build with no desktop has nothing to show it on.
--RUN if [ "$HERMES_BOT_DESKTOP" = "1" ]; then \
--        for i in 1 2 3; do \
--            npx playwright install chromium && break || \
--            { [ "$i" = 3 ] && exit 1; echo "playwright chromium install failed (attempt $i); retrying in 10s"; sleep 10; }; \
--        done; \
--    fi
--
+ # PM is resident too: never borrow application libraries or create its worker
+ # environment under /root (unreachable to the runtime UID).
+@@ -273,10 +278,22 @@ FROM runtime_base AS python_deps
+ # Source binding is created after the source copy below.
+ COPY pyproject.toml uv.lock ./
+ RUN touch ./README.md
++# Lean: only the [mcp] and [web] extras (MCP tooling plus the gateway
++# dashboard's fastapi/uvicorn). Every provider backend (anthropic, bedrock,
++# azure, ...) lazy-installs via pm on first use into /opt/data/installs, so
++# nothing else is baked.
+ RUN python3 -m pm.build_env --source /opt/hermes --python /usr/local/bin/python3 \
+     --out /opt/hermes/.venv --no-install-project --sealed \
+-    --extra all --extra messaging --extra otlp --extra anthropic --extra bedrock \
+-    --extra azure-identity --extra matrix --extra google-chat
++    --extra mcp --extra web
++
++# Lean: bake the Telegram platform adapter without pulling in the whole
++# [messaging] extra. Same pin as pyproject's [telegram] extra, so the
++# find_spec anchor in pm/extras.py ("telegram") reports the platform as
++# available and no runtime lazy install is attempted against the sealed
++# /opt/hermes/.venv (which is never written at runtime).
++RUN uv_bin="$(python3 -c 'from pm import installed_package; print(installed_package("uv").binary)')" && \
++    "$uv_bin" pip install --python /opt/hermes/.venv/bin/python --no-cache-dir \
++    "python-telegram-bot[webhooks]==22.8"
+ 
+ # Icons render on the runtime environment: Pillow and resvg-py are core
+ # dependencies. A stage of its own so the frontend stage keeps building its
+@@ -313,21 +330,9 @@ COPY --from=frontend_build /opt/hermes/node_modules/typescript /opt/hermes/node_
+ RUN mkdir -p /opt/hermes/node_modules/.bin && \
+     ln -s ../typescript/bin/tsc /opt/hermes/node_modules/.bin/tsc
+ 
 -# ---------- Photon iMessage sidecar deps (baked, NS-606) ----------
 -# The photon plugin's Node sidecar needs its own node_modules
 -# (spectrum-ts). The install tree is immutable at runtime, so a lazy
@@ -75,37 +89,9 @@ index ba9cbe8..6a141af 100644
 -RUN cd plugins/platforms/photon/sidecar && \
 -    npm ci --no-audit --fetch-retries=5 && \
 -    npm cache clean --force
-+    (cd web && npm run build) && \
-+    (cd ui-tui && npm run build) && \
-+    rm -rf node_modules web/node_modules ui-tui/node_modules \
-+           ui-tui/packages/hermes-ink/node_modules apps/shared/node_modules \
-+           /root/.npm /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
++# Lean: the Photon iMessage sidecar deps are NOT baked — the photon
++# platform is unavailable in the lean image (baking its Node sidecar here
++# would re-ship an npm install tree the lean build deliberately drops).
  
- # ---------- Layer-cached Python dependency install ----------
- # Copy only pyproject.toml + uv.lock so the Python dep resolve + wheel
-@@ -297,16 +288,15 @@ RUN cd plugins/platforms/photon/sidecar && \
- # The editable link is created after the source copy below.
- COPY pyproject.toml uv.lock ./
- RUN touch ./README.md
--RUN uv sync --frozen --no-install-project --extra all --extra messaging --extra otlp --extra anthropic --extra bedrock --extra azure-identity --extra matrix --extra google-chat
--
--# ---------- Frontend build (cached independently from Python source) ----------
--# Copy only the frontend source trees first so that Python-only changes don't
--# invalidate the (relatively slow) web + ui-tui build layer.
--COPY web/ web/
--COPY ui-tui/ ui-tui/
--COPY apps/shared/ apps/shared/
--RUN cd web && npm run build && \
--    cd ../ui-tui && npm run build
-+RUN uv sync --frozen \
-+    --no-install-project \
-+    --extra mcp \
-+    --extra web
-+
-+# Must match the pin in tools/lazy_deps.py ("platform.telegram"), or the
-+# adapter treats it as missing and lazy installs are disabled.
-+RUN uv pip install --no-cache-dir \
-+    "python-telegram-bot[webhooks]==22.8"
- 
- # ---------- Bot Screen X socket directory ----------
- # Xvnc would create this itself (/tmp is 1777); pre-creating it keeps ownership
+ # Shared product outputs are independent of application dependency assembly.
+ COPY --from=frontend_build /opt/products/tui /opt/hermes/ui-tui

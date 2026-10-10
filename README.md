@@ -6,10 +6,10 @@ A slimmer Docker image of [Hermes Agent](https://github.com/NousResearch/hermes-
 
 [`lean.patch`](lean.patch) is applied to the upstream `Dockerfile`:
 
-- **Smaller apt layer.** The build toolchain (`gcc`, `g++`, `make`, `cmake`, `python3-dev`, `libffi-dev`, `libolm-dev`), `docker-cli` and `iputils-ping` are dropped.
-- **No Playwright/Chromium.** Browser tools are unavailable.
+- **Smaller apt layer.** The build toolchain (`gcc`, `g++`, `make`, `cmake`, `python3-dev`, `python3-venv`, `libffi-dev`, `libolm-dev`), `docker-cli`, `iputils-ping`, and the shared libraries upstream apt-installs for its pinned Chromium are all dropped.
+- **No browser.** Chromium is left out of the pm tool store entirely; browser tools are unavailable.
 - **No Photon iMessage sidecar.**
-- **npm and `node_modules` removed** after the web UI and TUI are built, in the same layer, so they never ship. Node itself stays so the TUI can run.
+- **Frontend build deps never ship.** Upstream's multi-stage build (since v0.21.6) already keeps the web/TUI `node_modules` out of the runtime image; the lean patch just keeps the build-time-only toolchain that way. Node (and pm-staged npm) stay so the TUI can run.
 - **Fewer Python extras.** Only `mcp` and `web` are installed, plus `python-telegram-bot[webhooks]` for Telegram.
 
 Everything else (s6 supervision, entrypoint, data volume at `/opt/data`, the dashboard) is unchanged from upstream.
@@ -33,7 +33,7 @@ KAPSO_ALLOWED_USERS=15551234567
 
 Kapso needs a public HTTPS webhook at `https://<your-hostname>/kapso/webhook`, so in Cloudflare Zero Trust add a second public hostname (or a path rule on the existing one) that also routes to `http://hermes:8648` — the plugin's webhook port, separate from the dashboard's `9119`. Create the phone-number webhook in the Kapso dashboard pointing at that URL (kind `kapso`, event `whatsapp.message.received`, payload version `v2`, secret matching `KAPSO_WEBHOOK_SECRET`).
 
-`hermes kapso setup --install-cli` (the guided setup command) needs Node/npm to install the Kapso CLI, which this image removes at build time — run it on your host with `npx @kapso/cli` instead, or configure everything by hand with the env vars and manual webhook above.
+`hermes kapso setup --install-cli` (the guided setup command) installs the Kapso CLI via npm. Since v0.21.6 upstream ships Node and pm-staged npm in the image, the guided setup works in-container — or configure everything by hand with the env vars and manual webhook above.
 
 ## Tags
 
