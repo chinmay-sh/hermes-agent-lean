@@ -98,3 +98,21 @@ jobs:
             ${{ env.IMAGE }}:latest${{ matrix.variant }}
           cache-from: type=gha,scope=${{ matrix.variant || 'lean' }}
           cache-to: type=gha,mode=max,scope=${{ matrix.variant || 'lean' }}
+
+  notify-failure:
+    needs: build
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Trigger Hoplite automation
+        env:
+          WEBHOOK_URL: ${{ secrets.HOPLITE_WEBHOOK_URL }}
+          PAYLOAD: >-
+            {"repository":"${{ github.repository }}","workflow":"${{ github.workflow }}",
+            "run_id":"${{ github.run_id }}","run_attempt":"${{ github.run_attempt }}",
+            "run_url":"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "event":"${{ github.event_name }}","ref":"${{ github.ref_name }}","sha":"${{ github.sha }}"}
+        run: |
+          [ -n "$WEBHOOK_URL" ] || { echo "HOPLITE_WEBHOOK_URL not set"; exit 0; }
+          curl -fsS --retry 3 -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$WEBHOOK_URL"
