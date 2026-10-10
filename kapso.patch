@@ -16,7 +16,7 @@ index 2a328049..0b7eb64f 100644
 +# plugin's own looser `aiohttp>=3.9`, so this stays the one aiohttp source
 +# of truth for the image. The lean .venv is sealed/read-only at runtime, so
 +# the dependency cannot be lazy-installed on first use.
-+RUN uv_bin="$(python3 -c 'from pm import installed_package; print(installed_package("uv").binary)')" && \
++RUN uv_bin="$(python3 -c 'from pm import uv_launcher; print(uv_launcher("uv"))')" && \
 +    "$uv_bin" pip install --python /opt/hermes/.venv/bin/python --no-cache-dir "aiohttp==3.14.3"
 +
  # Icons render on the runtime environment: Pillow and resvg-py are core
