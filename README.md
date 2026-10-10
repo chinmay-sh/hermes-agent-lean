@@ -1,8 +1,38 @@
-# hermes-agent-lean
+<div align="center">
 
-A slimmer Docker image of [Hermes Agent](https://github.com/NousResearch/hermes-agent), rebuilt automatically for every upstream release.
+# 🪶 hermes-agent-lean
 
-## What's different from the official image
+**A slimmer Docker image of [Hermes Agent](https://github.com/NousResearch/hermes-agent), rebuilt automatically for every upstream release.**
+
+[![Upstream Hermes release](https://img.shields.io/github/v/release/NousResearch/hermes-agent?label=upstream%20hermes&logo=github&color=blueviolet)](https://github.com/NousResearch/hermes-agent/releases/latest)
+[![Our latest version](https://img.shields.io/github/v/tag/chinmay-sh/hermes-agent-lean?label=hermes-agent-lean&logo=docker&color=2496ED)](https://github.com/chinmay-sh/hermes-agent-lean/tags)
+[![Build](https://img.shields.io/github/actions/workflow/status/chinmay-sh/hermes-agent-lean/build.yml?label=build&logo=githubactions&logoColor=white)](https://github.com/chinmay-sh/hermes-agent-lean/actions/workflows/build.yml)
+![Platform](https://img.shields.io/badge/platform-linux%2Famd64-informational?logo=linux&logoColor=white)
+![Rebuilt daily](https://img.shields.io/badge/rebuilt-daily%2006%3A00%20UTC-success)
+
+[What's different](#-whats-different-from-the-official-image) ·
+[Kapso variant](#-the--kapso-variant) ·
+[Tags](#%EF%B8%8F-tags) ·
+[Usage](#-usage) ·
+[How it builds](#%EF%B8%8F-how-the-build-works)
+
+</div>
+
+---
+
+## 🔖 Versions
+
+| | Latest |
+|---|---|
+| 🏛️ Upstream [Hermes Agent](https://github.com/NousResearch/hermes-agent) | ![upstream](https://img.shields.io/github/v/release/NousResearch/hermes-agent?label=release) |
+| 🪶 This image (`hermes-agent-lean`) | ![ours](https://img.shields.io/github/v/tag/chinmay-sh/hermes-agent-lean?label=tag) |
+
+Each upstream release `vYYYY.M.D` gets a matching image tag, so the two should normally match within a day.
+
+> [!NOTE]
+> Badges are live (shields.io) and reflect the latest upstream release and the latest tag in this repo.
+
+## ✂️ What's different from the official image
 
 [`lean.patch`](lean.patch) is applied to the upstream `Dockerfile`:
 
@@ -14,7 +44,7 @@ A slimmer Docker image of [Hermes Agent](https://github.com/NousResearch/hermes-
 
 Everything else (s6 supervision, entrypoint, data volume at `/opt/data`, the dashboard) is unchanged from upstream.
 
-## The `-kapso` variant
+## 💬 The `-kapso` variant
 
 Every tag above is also built in a second flavor with the [Kapso WhatsApp Hermes plugin](https://github.com/gokapso/hermes-agent-plugin) baked in, tagged `<tag>-kapso` / `latest-kapso`. [`kapso.patch`](kapso.patch) applies on top of `lean.patch` and:
 
@@ -35,7 +65,7 @@ Kapso needs a public HTTPS webhook at `https://<your-hostname>/kapso/webhook`, s
 
 `hermes kapso setup --install-cli` (the guided setup command) installs the Kapso CLI via npm. Since v0.21.6 upstream ships Node and pm-staged npm in the image, the guided setup works in-container — or configure everything by hand with the env vars and manual webhook above.
 
-## Tags
+## 🏷️ Tags
 
 | Tag | Meaning |
 |---|---|
@@ -46,7 +76,7 @@ Kapso needs a public HTTPS webhook at `https://<your-hostname>/kapso/webhook`, s
 
 Only `linux/amd64` is built.
 
-## Usage
+## 🚀 Usage
 
 [`docker-compose.yml`](docker-compose.yml) runs the Hermes gateway with the web dashboard behind a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/). It publishes no host ports.
 
@@ -66,7 +96,7 @@ To update, bump the tag and run:
 docker compose pull && docker compose up -d
 ```
 
-## How the build works
+## ⚙️ How the build works
 
 [`.github/workflows/build.yml`](.github/workflows/build.yml) runs daily at 06:00 UTC. It can also be started by hand from the Actions tab, with an optional tag.
 
@@ -80,7 +110,7 @@ docker compose pull && docker compose up -d
 - Repo **secret** `DOCKERHUB_TOKEN`: a Docker Hub access token with Read & Write access.
 - Repo **variable** `DOCKERHUB_USERNAME`: your Docker Hub username.
 
-## When the patch stops applying
+## 🩹 When the patch stops applying
 
 If upstream changes its `Dockerfile`, the build fails and GitHub emails you. To fix it:
 
