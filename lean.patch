@@ -54,7 +54,7 @@ index a245d55f..2a328049 100644
 +# azure, ...) lazy-installs via pm on first use into /opt/data/installs, so
 +# nothing else is baked.
  RUN python3 -m pm.build_env --source /opt/hermes --python /usr/local/bin/python3 \
-     --out /opt/hermes/.venv --no-install-project --sealed \
+     --out /opt/hermes/.venv --no-install-project --sealed --record-selection \
 -    --extra all --extra messaging --extra otlp --extra anthropic --extra bedrock \
 -    --extra azure-identity --extra matrix --extra google-chat
 +    --extra mcp --extra web
