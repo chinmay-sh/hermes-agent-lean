@@ -1,5 +1,5 @@
 diff --git a/Dockerfile b/Dockerfile
-index a245d55f..2a328049 100644
+index e3d11031..2648d350 100644
 --- a/Dockerfile
 +++ b/Dockerfile
 @@ -73,10 +73,15 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/opt/hermes/tools
@@ -45,7 +45,7 @@ index a245d55f..2a328049 100644
  
  # PM is resident too: never borrow application libraries or create its worker
  # environment under /root (unreachable to the runtime UID).
-@@ -273,10 +278,22 @@ FROM runtime_base AS python_deps
+@@ -280,6 +285,10 @@ FROM runtime_base AS python_deps
  # Source binding is created after the source copy below.
  COPY pyproject.toml uv.lock ./
  RUN touch ./README.md
@@ -53,7 +53,12 @@ index a245d55f..2a328049 100644
 +# dashboard's fastapi/uvicorn). Every provider backend (anthropic, bedrock,
 +# azure, ...) lazy-installs via pm on first use into /opt/data/installs, so
 +# nothing else is baked.
+ # --cache puts uv's cache at /opt/hermes/uv-cache, the seed path that
+ # pm.packages.uv_cache_dir() merges into $HERMES_HOME/cache/uv on first use.
+ # Do not leave the cache at its default: HERMES_HOME is not set yet in this
+@@ -288,8 +297,16 @@ RUN touch ./README.md
  RUN python3 -m pm.build_env --source /opt/hermes --python /usr/local/bin/python3 \
+     --cache /opt/hermes/uv-cache \
      --out /opt/hermes/.venv --no-install-project --sealed --record-selection \
 -    --extra all --extra messaging --extra otlp --extra anthropic --extra bedrock \
 -    --extra azure-identity --extra matrix --extra google-chat
@@ -70,7 +75,7 @@ index a245d55f..2a328049 100644
  
  # Icons render on the runtime environment: Pillow and resvg-py are core
  # dependencies. A stage of its own so the frontend stage keeps building its
-@@ -313,21 +330,9 @@ COPY --from=frontend_build /opt/hermes/node_modules/typescript /opt/hermes/node_
+@@ -326,21 +343,9 @@ COPY --from=frontend_build /opt/hermes/node_modules/typescript /opt/hermes/node_
  RUN mkdir -p /opt/hermes/node_modules/.bin && \
      ln -s ../typescript/bin/tsc /opt/hermes/node_modules/.bin/tsc
  
